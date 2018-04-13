@@ -99,16 +99,16 @@ const writeLine = write => bitmapLine => {
     const line = new Uint8Array(SSD1306_LCDWIDTH + 1);
     line.set([SSD1306_SETSTARTLINE], 0)
     line.set(bitmapLine, 1)
-    console.log(line)
     write(line)
 }
 
 function createRender(write, height) {
-    const renderCommands = Uint8Array([
+    const renderCommands = new Uint8Array([
         SSD1306_COLUMNADDR,
         0x00, 
         SSD1306_LCDWIDTH - 1,
         
+        SSD1306_PAGEADDR,
         0x00,
         (height>>3) - 1
     ]);
@@ -168,9 +168,7 @@ function createDisplay(write, height = 32) {
         new Uint8Array(SSD1306_LCDWIDTH),
         new Uint8Array(SSD1306_LCDWIDTH),
     ]
-
-    bitmap[4] = new Uint8Array([1,1,1,1,1,1,1,1,1,1,1,1,1,1,1])
-
+    bitmap.forEach(array => array[1] = 1);
     render(bitmap);
 
 }
