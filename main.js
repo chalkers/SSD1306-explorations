@@ -1,4 +1,5 @@
-const SSD1306_I2C_ADDRESS = 0x3C  
+// @ts-check
+const SSD1306_I2C_ADDRESS = 0x3C
 const SSD1306_SETCONTRAST = 0x81
 const SSD1306_DISPLAYALLON_RESUME = 0xA4
 const SSD1306_DISPLAYALLON = 0xA5
@@ -43,13 +44,40 @@ const SSD1306_RIGHT_HORIZONTAL_SCROLL = 0x26
 const SSD1306_LEFT_HORIZONTAL_SCROLL = 0x27
 const SSD1306_VERTICAL_AND_RIGHT_HORIZONTAL_SCROLL = 0x29
 const SSD1306_VERTICAL_AND_LEFT_HORIZONTAL_SCROLL = 0x2A
+
 const SSD1306_LCDWIDTH = 128
+
+/**
+ * Creates a bitmap for the display
+ * 
+ * @param {number} height - height of the display in pixels
+ */
+const createBitmap = height => new Uint8Array(SSD1306_LCDWIDTH * (height >> 3))
 
 const createWrite = (i2c, address) => value => i2c.writeTo(address, value);
 
-function setup() {
-    I2C1.setup({ scl: 5, sda: 4 });
-    return I2C1;
+const setup = i2c => i2c.setup({ scl: 5, sda: 4 });
+
+const sendCommands = (write, commands) => commands.forEach(command => write([0, command]))
+
+/**
+ * 
+ * @param {any} o 
+ * @returns {number} length of the array like object
+ */
+const arrayLikeLength = o => o.length || o.byteLength
+
+/**
+ * 
+ * @param {Uint8Array} bitmap 
+ */
+const createPages = bitmap => {
+    const pages = []
+    for (let pageIndex = 0; pageIndex < bitmap.length; pageIndex += SSD1306_LCDWIDTH) {
+        const page = new Uint8Array(bitmap.buffer, pageIndex, SSD1306_LCDWIDTH);
+        pages.push(page)
+    }
+    return pages
 }
 
 function displayInitialization(write, height, externalVCC) {
@@ -60,24 +88,24 @@ function displayInitialization(write, height, externalVCC) {
 
         SSD1306_SETMULTIPLEX,
         height - 1,
-        
+
         SSD1306_SETDISPLAYOFFSET,
         0x00,
-        
+
         SSD1306_SETSTARTLINE,
-        
+
         SSD1306_CHARGEPUMP,
         externalVCC === SSD1306_EXTERNALVCC ? 0x10 : 0x14,
-        
+
         SSD1306_MEMORYMODE,
         0x00,
-        
+
         SSD1306_SEGREMAP | 0x01,
         SSD1306_COMSCANDEC,
-        
+
         SSD1306_SETCOMPINS,
         height === 64 ? 0x12 : 0x02,
-        
+
         SSD1306_SETCONTRAST,
         externalVCC === SSD1306_EXTERNALVCC ? 0x9F : 0xCF,
 
@@ -91,93 +119,62 @@ function displayInitialization(write, height, externalVCC) {
         SSD1306_NORMALDISPLAY,
         SSD1306_DISPLAYON
     ])
-    const sendCommand = command => write([0,command]);
-    initializationCommands.forEach(val => sendCommand(val));
+    sendCommands(write, initializationCommands)
 }
 
-const writeLine = write => bitmapLine => {
-    const line = new Uint8Array(SSD1306_LCDWIDTH + 1);
-    line.set([SSD1306_SETSTARTLINE], 0)
-    line.set(bitmapLine, 1)
-    write(line)
+const createPageWrite = write => bitmapPage => {
+    const page = new Uint8Array(SSD1306_LCDWIDTH + 1);
+    page.set([SSD1306_SETSTARTLINE], 0)
+    page.set(bitmapPage, 1)
+    write(page)
 }
 
 function createRender(write, height) {
     const renderCommands = new Uint8Array([
         SSD1306_COLUMNADDR,
-        0x00, 
+        0x00,
         SSD1306_LCDWIDTH - 1,
-        
+
         SSD1306_PAGEADDR,
         0x00,
-        (height>>3) - 1
+        (height >> 3) - 1 // height >> 3 == number of pages
     ]);
-    const sendCommand = command => write([0,command]);
-    const lineWrite = writeLine(write)
-    return bitmap => {
-        renderCommands.forEach(val => sendCommand(val))
-        
-        bitmap.forEach(line => lineWrite(line))
-     }
+    const pageWrite = createPageWrite(write)
+    /**
+     * 
+     * @param {Uint8Array} bitmap 
+     */
+    const render = bitmap => {
+        sendCommands(write, renderCommands)
+        const pages = createPages(bitmap)
+        pages.forEach(pageWrite);
+    }
+    return render
 }
 
-function createDisplay(write, height = 32) {
+function createDisplay(height = 32) {
+    // @ts-ignore
+    setup(I2C1)
+    // @ts-ignore
+    const write = createWrite(I2C1, SSD1306_I2C_ADDRESS)
     displayInitialization(write, height)
-    const render = createRender(write, height)
-    const bitmap = [
-        new Uint8Array(SSD1306_LCDWIDTH),
-        new Uint8Array(SSD1306_LCDWIDTH),
-        new Uint8Array(SSD1306_LCDWIDTH),
-
-        new Uint8Array(SSD1306_LCDWIDTH),
-        new Uint8Array(SSD1306_LCDWIDTH),
-        new Uint8Array(SSD1306_LCDWIDTH),
-
-        new Uint8Array(SSD1306_LCDWIDTH),
-        new Uint8Array(SSD1306_LCDWIDTH),
-        new Uint8Array(SSD1306_LCDWIDTH),
-
-        new Uint8Array(SSD1306_LCDWIDTH),
-        new Uint8Array(SSD1306_LCDWIDTH),
-        new Uint8Array(SSD1306_LCDWIDTH),
-
-        new Uint8Array(SSD1306_LCDWIDTH),
-        new Uint8Array(SSD1306_LCDWIDTH),
-        new Uint8Array(SSD1306_LCDWIDTH),
-
-        new Uint8Array(SSD1306_LCDWIDTH),
-        new Uint8Array(SSD1306_LCDWIDTH),
-        new Uint8Array(SSD1306_LCDWIDTH),
-
-        new Uint8Array(SSD1306_LCDWIDTH),
-        new Uint8Array(SSD1306_LCDWIDTH),
-        new Uint8Array(SSD1306_LCDWIDTH),
-
-        new Uint8Array(SSD1306_LCDWIDTH),
-        new Uint8Array(SSD1306_LCDWIDTH),
-        new Uint8Array(SSD1306_LCDWIDTH),
-
-        new Uint8Array(SSD1306_LCDWIDTH),
-        new Uint8Array(SSD1306_LCDWIDTH),
-        new Uint8Array(SSD1306_LCDWIDTH),
-
-        new Uint8Array(SSD1306_LCDWIDTH),
-        new Uint8Array(SSD1306_LCDWIDTH),
-        new Uint8Array(SSD1306_LCDWIDTH),
-
-        new Uint8Array(SSD1306_LCDWIDTH),
-        new Uint8Array(SSD1306_LCDWIDTH),
-    ]
-    bitmap.forEach(array => array[1] = 1);
-    render(bitmap);
-
+    const setContrast = contrast => write([0, SSD1306_SETCONTRAST, contrast])
+    const off = () => write([0, SSD1306_DISPLAYOFF])
+    const on = () => write([0, SSD1306_DISPLAYON])
+    return {
+        render: createRender(write, height),
+        setContrast,
+        off,
+        on,
+    }
 }
-
-// TODO - figure out how to set contrast
-
 
 function main() {
-    const i2c = setup();
-    const write = createWrite(i2c, SSD1306_I2C_ADDRESS);
-    createDisplay(write);
+    const display = createDisplay()
+
+    const bitmap = createBitmap(32)
+    for(let i = 0; i < bitmap.length; i++) {
+        bitmap[i] = 3;
+    }
+    display.render(bitmap)
 }
